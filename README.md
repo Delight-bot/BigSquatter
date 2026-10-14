@@ -6,6 +6,10 @@ time. Everything runs on the device; no video is recorded or uploaded.
 
 Installs to the home screen as a PWA, so it behaves like a native app without an app store.
 
+**Live:** https://d16oowfiirb0bb.cloudfront.net (open on a phone; served from S3 + CloudFront, deployed with AWS CDK)
+
+**AI coach:** [`coach/`](coach/) is a Python RAG service that turns workout numbers into coaching advice, using Hugging Face retrieval and NVIDIA Nemotron through NIM.
+
 ---
 
 ## What it actually does

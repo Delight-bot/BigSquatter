@@ -44,8 +44,9 @@ flowchart LR
   UI <-->|wss| WS <--> L2 <--> RT
 ```
 
-**Status:** stateful stack (tables, user pool, budget) and web stack (S3 + CloudFront) are written
-and tested (`infra/`). The HTTP API and the WebSocket relay come next.
+**Status:** the stateful stack (tables, user pool, budget) and the web stack (S3 + CloudFront) are
+deployed to us-east-2, and the app is live at https://d16oowfiirb0bb.cloudfront.net. The HTTP API
+and the WebSocket relay come next.
 
 ## Request flows
 
