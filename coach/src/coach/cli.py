@@ -6,6 +6,9 @@
 from __future__ import annotations
 
 import argparse
+import sys
+
+from openai import APIError
 
 from .api import build_coach
 from .workout import Session, WorkoutSummary, describe
@@ -36,7 +39,10 @@ def main() -> None:
         question=args.question,
     )
 
-    result = build_coach().advise(workout)
+    try:
+        result = build_coach().advise(workout)
+    except (APIError, RuntimeError) as e:
+        sys.exit(f"Coach unavailable: {e}")
     if args.show_sources:
         print(f"Workout: {describe(workout)}\n")
         for h in result.sources:

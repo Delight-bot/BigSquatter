@@ -1,3 +1,5 @@
+import os
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -89,3 +91,18 @@ def test_api_round_trip(retriever):
         assert len(r.json()["sources"]) == 3
 
         assert client.post("/coach", json={"day": 31}).status_code == 422
+
+
+def test_env_file_fills_missing_vars_but_never_overrides(tmp_path, monkeypatch):
+    from coach.llm import load_env_file
+
+    env = tmp_path / ".env"
+    env.write_text("# comment\nNIM_MODEL='from-file'\nNVIDIA_API_KEY=nvapi-file\n", encoding="utf-8")
+    monkeypatch.delenv("NIM_MODEL", raising=False)
+    monkeypatch.setenv("NVIDIA_API_KEY", "nvapi-real-env")
+    load_env_file(env)
+    try:
+        assert os.environ["NIM_MODEL"] == "from-file"
+        assert os.environ["NVIDIA_API_KEY"] == "nvapi-real-env"
+    finally:
+        os.environ.pop("NIM_MODEL", None)
