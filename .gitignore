@@ -35,3 +35,9 @@ coverage
 
 # Personal planning notes (not for the public repo)
 Outline
+
+# Python
+__pycache__/
+*.egg-info/
+.pytest_cache/
+.venv/
