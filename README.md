@@ -12,6 +12,61 @@ Installs to the home screen as a PWA, so it behaves like a native app without an
 
 ---
 
+## Architecture
+
+```mermaid
+flowchart LR
+  subgraph Phone["📱 Phone: installed PWA, works offline"]
+    CAM["Camera"] --> POSE["MediaPipe Pose<br/>on-device"]
+    POSE --> SM["Knee angle →<br/>rep state machine"]
+    SM --> ENG["Challenge engine<br/>streaks · calendar"]
+    ENG --> CARD["Coach card"]
+  end
+
+  subgraph AWS["☁️ AWS us-east-2 · defined in CDK"]
+    CF["CloudFront<br/>HTTPS"]
+    S3[("S3<br/>app build")]
+    APIGW["API Gateway<br/>throttled"]
+    LAMBDA["Lambda · Python<br/>RAG coach"]
+    SSM[("SSM Parameter Store<br/>NVIDIA key, encrypted")]
+    CF -- "/*" --> S3
+    CF -- "/api/*" --> APIGW --> LAMBDA
+    SSM -. "cold start" .-> LAMBDA
+  end
+
+  subgraph NV["🟩 NVIDIA NIM"]
+    EMB["nemotron-3-embed-1b<br/>retrieval"]
+    LLM["nemotron-3.5-lightning<br/>30B MoE · generation"]
+  end
+
+  CARD -- "workout numbers<br/>(never video)" --> CF
+  LAMBDA -- "1 · embed" --> EMB
+  LAMBDA -- "2 · generate" --> LLM
+  ENG <-. "versus: WebRTC<br/>peer to peer" .-> FRIEND["📱 Friend's phone"]
+
+  classDef nvidia fill:#76b900,stroke:#4a7300,color:#000
+  classDef aws fill:#ff9900,stroke:#b36b00,color:#000
+  class EMB,LLM nvidia
+  class CF,APIGW,LAMBDA aws
+```
+
+- **Vision stays on the phone.** Pose detection runs in the browser, so video never leaves the
+  device, inference is free, and the app works offline.
+- **Language goes to the cloud.** After a set, only the numbers (day, reps, depth, streak) go to
+  `/api/coach`. The Lambda retrieves matching guidance with NVIDIA's embedding model and has
+  Nemotron write the advice: retrieval-augmented generation (RAG). Details in [`coach/`](coach/).
+- **One domain.** CloudFront serves the app and routes `/api/*` to API Gateway, so there's no CORS
+  and no API URL in the build. The NVIDIA key lives encrypted in Parameter Store, readable only by
+  the coach Lambda.
+- **Versus is peer to peer.** A public broker (PeerJS) introduces the two phones; rep counts then go
+  directly between them over WebRTC.
+- **Also provisioned:** DynamoDB, Cognito (passwordless sign-in) and a budget alarm, ready for
+  cloud sync.
+
+Design decisions and trade-offs are recorded in [`docs/architecture.md`](docs/architecture.md).
+
+---
+
 ## What it actually does
 
 ```
@@ -94,9 +149,10 @@ Or deploy the static build anywhere: `npm run build` → serve `dist/`.
 | **CV** | MediaPipe Pose Landmarker (lite, float16) via `@mediapipe/tasks-vision`, GPU with CPU fallback |
 | **State** | Zustand, persisted to localStorage |
 | **PWA** | `vite-plugin-pwa`; app shell precached, model and WASM cached on first use |
-| **Backend** | Supabase (optional — see below) |
+| **AI coach** | Python RAG service: NVIDIA Nemotron via NIM (embeddings + generation), Hugging Face locally, FastAPI · [`coach/`](coach/) |
+| **Cloud** | AWS via CDK: CloudFront, S3, API Gateway, Lambda, SSM, DynamoDB, Cognito, Budgets · [`infra/`](infra/) |
 | **Versus** | PeerJS (WebRTC data channel), lazy-loaded |
-| **Tests** | Vitest, 168 tests over the CV, challenge and match logic |
+| **Tests** | 210 total: Vitest (181, app), pytest (16, coach), CDK assertions (13, infra) |
 
 ### Why a PWA and not React Native
 
@@ -164,7 +220,10 @@ Camera frames are analysed in memory and discarded. Nothing is recorded, saved, 
 model and its runtime are served from the app's own origin, so inference needs no network at all
 after first load. Progress lives in this device's localStorage unless you opt into sync.
 
-## Optional: cloud sync
+## Optional: cloud sync (legacy)
+
+From before the move to AWS; superseded by the DynamoDB/Cognito stack in `infra/`.
+
 
 1. Run [`supabase/schema.sql`](supabase/schema.sql) in the Supabase SQL editor (RLS included).
 2. Copy `.env.example` to `.env.local` and fill in the URL and anon key.
