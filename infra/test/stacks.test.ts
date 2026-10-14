@@ -9,6 +9,7 @@ import { Match, Template } from 'aws-cdk-lib/assertions';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import { CoachStack, NVIDIA_KEY_PARAM } from '../lib/coach-stack.js';
 import { StatefulStack } from '../lib/stateful-stack.js';
 import { WebStack } from '../lib/web-stack.js';
 
@@ -106,6 +107,53 @@ describe('WebStack', () => {
     template.hasResourceProperties('AWS::CloudFront::Distribution', {
       DistributionConfig: Match.objectLike({
         DefaultCacheBehavior: Match.objectLike({ ViewerProtocolPolicy: 'redirect-to-https' }),
+      }),
+    });
+  });
+});
+
+describe('CoachStack + WebStack', () => {
+  // Skip bundling: tests check the template, not the Python package.
+  const app = new App({ context: { 'aws:cdk:bundling-stacks': [] } });
+  const coach = new CoachStack(app, 'Coach', { env, coachPath: path.resolve(here, '../../coach') });
+  const web = new WebStack(app, 'Web', { env, distPath: path.resolve(here, '../../dist'), api: coach.api });
+  const coachTemplate = Template.fromStack(coach);
+  const webTemplate = Template.fromStack(web);
+
+  it('runs the coach on Python with the key parameter name, never the key', () => {
+    coachTemplate.hasResourceProperties('AWS::Lambda::Function', {
+      Runtime: 'python3.13',
+      Handler: 'coach.aws_lambda.handler',
+      Environment: { Variables: { NVIDIA_API_KEY_PARAM: NVIDIA_KEY_PARAM } },
+    });
+    expect(JSON.stringify(coachTemplate.toJSON())).not.toMatch(/nvapi-/);
+  });
+
+  it('lets the Lambda read only the key parameter', () => {
+    const policies = Object.values(coachTemplate.findResources('AWS::IAM::Policy'));
+    const statements = policies.flatMap((p) => p.Properties.PolicyDocument.Statement);
+    const ssm = statements.filter((st) => JSON.stringify(st.Action).includes('ssm:'));
+    expect(ssm).toHaveLength(1);
+    expect(ssm[0].Action).toBe('ssm:GetParameter');
+    expect(JSON.stringify(ssm[0].Resource)).toContain(`:parameter${NVIDIA_KEY_PARAM}`);
+  });
+
+  it('throttles the public API', () => {
+    coachTemplate.hasResourceProperties('AWS::ApiGatewayV2::Stage', {
+      DefaultRouteSettings: { ThrottlingRateLimit: 2, ThrottlingBurstLimit: 5 },
+    });
+  });
+
+  it('serves /api/* through CloudFront without caching', () => {
+    webTemplate.hasResourceProperties('AWS::CloudFront::Distribution', {
+      DistributionConfig: Match.objectLike({
+        CacheBehaviors: Match.arrayWith([
+          Match.objectLike({
+            PathPattern: '/api/*',
+            AllowedMethods: Match.arrayWith(['POST']),
+            ViewerProtocolPolicy: 'https-only',
+          }),
+        ]),
       }),
     });
   });

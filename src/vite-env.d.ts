@@ -7,6 +7,8 @@ interface ImportMetaEnv {
   /** Both must be set for the optional Supabase sync to activate. */
   readonly VITE_SUPABASE_URL?: string;
   readonly VITE_SUPABASE_ANON_KEY?: string;
+  /** Coach API origin for development, e.g. http://localhost:8000. Production uses same-origin /api. */
+  readonly VITE_COACH_URL?: string;
 }
 
 interface ImportMeta {

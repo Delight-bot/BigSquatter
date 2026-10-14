@@ -3,18 +3,14 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from .coach import Coach
-from .llm import NimConfig, nim_chat
-from .retriever import BGE_QUERY_PREFIX, Retriever, hf_embedder, load_chunks
+from .service import build_coach
 from .workout import WorkoutSummary
-
-KNOWLEDGE_DIR = Path(__file__).resolve().parents[2] / "knowledge"
 
 
 class SourceOut(BaseModel):
@@ -26,11 +22,6 @@ class SourceOut(BaseModel):
 class AdviceOut(BaseModel):
     advice: str
     sources: list[SourceOut]
-
-
-def build_coach() -> Coach:
-    retriever = Retriever(load_chunks(KNOWLEDGE_DIR), hf_embedder(), query_prefix=BGE_QUERY_PREFIX)
-    return Coach(retriever, nim_chat(NimConfig.from_env()))
 
 
 def create_app(coach: Coach | None = None) -> FastAPI:
@@ -47,7 +38,10 @@ def create_app(coach: Coach | None = None) -> FastAPI:
     def health() -> dict[str, str]:
         return {"status": "ok"}
 
+    # /api/coach matches the deployed path (CloudFront → API Gateway → Lambda),
+    # so the app can be pointed at this server in development.
     @app.post("/coach", response_model=AdviceOut)
+    @app.post("/api/coach", response_model=AdviceOut)
     def advise(workout: WorkoutSummary, request: Request) -> AdviceOut:
         result = request.app.state.coach.advise(workout)
         return AdviceOut(

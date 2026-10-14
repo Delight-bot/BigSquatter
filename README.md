@@ -8,7 +8,7 @@ Installs to the home screen as a PWA, so it behaves like a native app without an
 
 **Live:** https://d16oowfiirb0bb.cloudfront.net (open on a phone; served from S3 + CloudFront, deployed with AWS CDK)
 
-**AI coach:** [`coach/`](coach/) is a Python RAG service that turns workout numbers into coaching advice, using Hugging Face retrieval and NVIDIA Nemotron through NIM.
+**AI coach:** after each set, the app shows advice from [`coach/`](coach/), a Python RAG service on AWS Lambda that retrieves exercise guidance and generates advice with **NVIDIA Nemotron through NIM**.
 
 ---
 

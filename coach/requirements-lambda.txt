@@ -1,0 +1,5 @@
+# Runtime dependencies for the Lambda build (no PyTorch: Lambda uses NIM embeddings).
+# boto3 is provided by the Lambda runtime.
+numpy>=2.0
+openai>=1.50
+pydantic>=2.9

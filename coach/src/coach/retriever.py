@@ -68,16 +68,23 @@ def _normalise(vectors: np.ndarray) -> np.ndarray:
 
 
 class Retriever:
-    def __init__(self, chunks: Sequence[Chunk], embed: Embedder, query_prefix: str = "") -> None:
+    def __init__(
+        self,
+        chunks: Sequence[Chunk],
+        embed: Embedder,
+        query_prefix: str = "",
+        embed_query: Embedder | None = None,
+    ) -> None:
+        """`embed_query` is for models that embed queries and passages differently."""
         if not chunks:
             raise ValueError("Knowledge base is empty")
         self._chunks = list(chunks)
-        self._embed = embed
+        self._embed_query = embed_query or embed
         self._query_prefix = query_prefix
         self._matrix = _normalise(np.asarray(embed([c.passage for c in self._chunks]), dtype=np.float32))
 
     def search(self, query: str, k: int = 3) -> list[Hit]:
-        q = _normalise(np.asarray(self._embed([self._query_prefix + query]), dtype=np.float32))[0]
+        q = _normalise(np.asarray(self._embed_query([self._query_prefix + query]), dtype=np.float32))[0]
         scores = self._matrix @ q
         top = np.argsort(-scores)[:k]
         return [Hit(self._chunks[i], float(scores[i])) for i in top]

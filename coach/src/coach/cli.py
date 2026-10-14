@@ -10,7 +10,7 @@ import sys
 
 from openai import APIError
 
-from .api import build_coach
+from .service import build_coach
 from .workout import Session, WorkoutSummary, describe
 
 
@@ -25,6 +25,7 @@ def main() -> None:
     p.add_argument("--missed-yesterday", action="store_true")
     p.add_argument("--question", help="free-text question for the coach")
     p.add_argument("--show-sources", action="store_true")
+    p.add_argument("--embeddings", choices=["hf", "nim"], help="retrieval model: local Hugging Face or NVIDIA-hosted")
     args = p.parse_args()
 
     sessions = [Session(reps=args.reps, average_depth_percent=args.depth, duration_seconds=0)] if args.depth is not None else []
@@ -40,7 +41,7 @@ def main() -> None:
     )
 
     try:
-        result = build_coach().advise(workout)
+        result = build_coach(embeddings=args.embeddings).advise(workout)
     except (APIError, RuntimeError) as e:
         sys.exit(f"Coach unavailable: {e}")
     if args.show_sources:

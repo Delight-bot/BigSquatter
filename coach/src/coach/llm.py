@@ -13,7 +13,10 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+import numpy as np
 from openai import OpenAI
+
+from .retriever import Embedder
 
 HOSTED_BASE_URL = "https://integrate.api.nvidia.com/v1"
 DEFAULT_MODEL = "nvidia/nemotron-3.5-lightning-30b-a3b"
@@ -91,3 +94,23 @@ def nim_chat(config: NimConfig) -> ChatFn:
         return text
 
     return chat
+
+
+NIM_EMBED_MODEL = "nvidia/nemotron-3-embed-1b"
+
+
+def nim_embedder(config: NimConfig, input_type: str, model: str = NIM_EMBED_MODEL) -> Embedder:
+    """Embeddings from NIM. Retrieval models embed queries and passages differently,
+    so callers make one embedder per `input_type` ("query" or "passage")."""
+    client = OpenAI(base_url=config.base_url, api_key=config.api_key or "not-needed")
+
+    def embed(texts):
+        response = client.embeddings.create(
+            model=model,
+            input=list(texts),
+            encoding_format="float",
+            extra_body={"input_type": input_type, "truncate": "END"},
+        )
+        return np.array([d.embedding for d in sorted(response.data, key=lambda d: d.index)], dtype=np.float32)
+
+    return embed

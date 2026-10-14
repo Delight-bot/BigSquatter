@@ -46,6 +46,22 @@ flowchart LR
 - **Privacy.** Only aggregate numbers leave the phone. Pose detection stays on-device.
 - **Safety.** The pain guidance tells the user to stop and see a professional, and the system prompt forbids diagnosis.
 
+## Deployed on AWS
+
+The live app calls the coach after each camera set (the **Coach** card on the Home screen):
+
+```
+phone → CloudFront /api/* → API Gateway (throttled) → Lambda (Python 3.13) → NVIDIA NIM
+                                                         ↑
+                                     key: SSM Parameter Store SecureString
+```
+
+The Lambda (`coach/aws_lambda.py`) uses NVIDIA-hosted embeddings (`nemotron-3-embed-1b`) instead of the local Hugging Face model, so it needs no PyTorch. The infrastructure is `infra/lib/coach-stack.ts`, and the reasoning is in ADR-8 of [`docs/architecture.md`](../docs/architecture.md). Measured: ~7s cold start, ~1s warm.
+
+```bash
+curl -X POST https://d16oowfiirb0bb.cloudfront.net/api/coach   -H 'content-type: application/json'   -d '{"day": 9, "target": 50, "reps_today": 50, "question": "my left knee hurts when I go down"}'
+```
+
 ## Run it
 
 Needs Python 3.11+. These steps use WSL Ubuntu and [uv](https://docs.astral.sh/uv/).
@@ -61,6 +77,7 @@ pytest                                     # no API key or model download needed
 cp .env.example .env                       # then put your free key from https://build.nvidia.com in .env
 coach --day 12 --target 70 --reps 45 --depth 78 --missed-yesterday --show-sources
 coach --day 9 --target 50 --reps 50 --question "my left knee hurts when I go down"
+coach --embeddings nim --day 12 --target 70 --reps 45   # NVIDIA-hosted embeddings, as in Lambda
 
 uvicorn coach.api:app --port 8000          # HTTP API; docs at http://localhost:8000/docs
 ```

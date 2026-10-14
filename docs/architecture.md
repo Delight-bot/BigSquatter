@@ -45,8 +45,8 @@ flowchart LR
 ```
 
 **Status:** the stateful stack (tables, user pool, budget) and the web stack (S3 + CloudFront) are
-deployed to us-east-2, and the app is live at https://d16oowfiirb0bb.cloudfront.net. The HTTP API
-and the WebSocket relay come next.
+deployed to us-east-2, and the app is live at https://d16oowfiirb0bb.cloudfront.net. The AI coach
+(ADR-8) is live at `/api/coach`. The sync API and the WebSocket relay come next.
 
 ## Request flows
 
@@ -123,6 +123,31 @@ requested before launch. It's a support form; approval usually takes about a day
 Same language as the app, real types on every resource, and tests (`infra/test/`) that assert
 the properties that must never regress: buckets private, data retained, HTTPS enforced, sign-in
 passwordless. Nothing is created by hand in the console.
+
+### ADR-8: AI coach on Lambda, calling NVIDIA NIM, behind the site's own CloudFront
+
+After a camera set, the app sends the workout numbers (never video) to `/api/coach` and shows
+two to four sentences of advice. A Python Lambda retrieves relevant guidance and asks
+**NVIDIA Nemotron** for the advice; both the embedding model (`nemotron-3-embed-1b`) and the chat
+model (`nemotron-3.5-lightning-30b-a3b`) are NVIDIA-hosted NIM endpoints.
+
+- **Hosted NIM over a self-hosted GPU.** A GPU endpoint bills by the hour, even when idle; this
+  feature is used for a second after each workout. NIM uses the OpenAI-compatible API, so moving
+  to a self-hosted NIM (EC2 or SageMaker) only changes `NIM_BASE_URL` if volume ever justifies it.
+- **Hosted embeddings in Lambda, Hugging Face locally.** The local build embeds with a Hugging Face
+  model, which needs PyTorch and is far too heavy for Lambda. Using NVIDIA's embedding endpoint
+  keeps the deployment package to NumPy, the OpenAI client and Pydantic.
+- **Same origin.** CloudFront routes `/api/*` to API Gateway, so the browser calls its own domain:
+  no CORS, and no API URL baked into the build.
+- **The key never touches code.** It's a SecureString in SSM Parameter Store, created by hand; the
+  Lambda's role can read only that parameter.
+- **Abuse limits.** The API is public, like the site, so the stage is throttled (2 requests/s,
+  burst 5). The worst case is spent NVIDIA credits, not an AWS bill.
+
+*Trade-offs:* a cold start takes ~7s (it embeds the knowledge base), while warm calls take ~1s.
+The card shows a spinner, and the workout is already saved, so nothing waits on it. The model
+occasionally adds advice that isn't in the knowledge base (e.g. "apply ice"); tightening that
+would mean stricter prompting or a grounding check.
 
 ## Security
 

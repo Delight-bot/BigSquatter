@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { getStats } from '../challenge/engine';
 import { computeStreak } from '../challenge/streak';
 import { CHALLENGE_LENGTH } from '../challenge/plan';
+import { CoachCard } from '../components/CoachCard';
 import { CameraIcon } from '../components/Icons';
 import { ProgressBar } from '../components/ProgressBar';
 import { StatTile } from '../components/StatTile';
@@ -80,6 +81,8 @@ export function Home({ challenge }: HomeProps) {
           </>
         )}
       </div>
+
+      <CoachCard challenge={challenge} />
 
       <div className="stack">
         <Link to="/workout" className="btn btn--primary" style={{ textDecoration: 'none' }}>

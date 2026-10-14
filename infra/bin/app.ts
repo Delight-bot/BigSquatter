@@ -3,13 +3,15 @@
  *
  *   npx cdk deploy --all -c alertEmail=you@example.com
  *
- * Stacks so far: stateful (data + identity + budget) and web (hosting). The
- * API and the live-versus WebSocket stacks come next; see docs/architecture.md.
+ * Stacks: stateful (data + identity + budget), coach (AI coach API) and web
+ * (hosting, which also fronts the coach at /api/*). The sync API and the
+ * live-versus WebSocket stacks come next; see docs/architecture.md.
  */
 
 import { App } from 'aws-cdk-lib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { CoachStack } from '../lib/coach-stack.js';
 import { StatefulStack } from '../lib/stateful-stack.js';
 import { WebStack } from '../lib/web-stack.js';
 
@@ -36,9 +38,16 @@ new StatefulStack(app, 'SquatChallenge-Stateful', {
   description: 'Squat Challenge: tables, user pool, budget (retained on delete).',
 });
 
+const coach = new CoachStack(app, 'SquatChallenge-Coach', {
+  env,
+  coachPath: path.resolve(here, '../../coach'),
+  description: 'Squat Challenge: AI coach (API Gateway + Lambda → NVIDIA NIM).',
+});
+
 new WebStack(app, 'SquatChallenge-Web', {
   env,
   distPath: path.resolve(here, '../../dist'),
+  api: coach.api,
   description: 'Squat Challenge: S3 + CloudFront hosting for the PWA.',
 });
 

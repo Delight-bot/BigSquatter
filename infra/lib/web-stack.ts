@@ -14,7 +14,8 @@
 
 import { CfnOutput, RemovalPolicy, Stack, type StackProps } from 'aws-cdk-lib';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
-import { S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
+import type * as apigw from 'aws-cdk-lib/aws-apigatewayv2';
+import { HttpOrigin, S3BucketOrigin } from 'aws-cdk-lib/aws-cloudfront-origins';
 import * as s3 from 'aws-cdk-lib/aws-s3';
 import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import type { Construct } from 'constructs';
@@ -22,6 +23,8 @@ import type { Construct } from 'constructs';
 export interface WebStackProps extends StackProps {
   /** Path to the built app (`npm run build` → `dist/`). */
   distPath: string;
+  /** Served at `/api/*` on the same domain, so the app needs no CORS or API URL. */
+  api?: apigw.IHttpApi;
 }
 
 export class WebStack extends Stack {
@@ -58,6 +61,18 @@ export class WebStack extends Stack {
         '/assets/*': { origin, ...longCache },
         '/models/*': { origin, ...longCache },
         '/mediapipe/*': { origin, ...longCache },
+        ...(props.api && {
+          '/api/*': {
+            origin: new HttpOrigin(
+              `${props.api.apiId}.execute-api.${Stack.of(this).region}.${Stack.of(this).urlSuffix}`,
+            ),
+            viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.HTTPS_ONLY,
+            allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
+            cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+            // API Gateway routes on its own Host header, so forward everything else.
+            originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+          },
+        }),
       },
       // The app uses hash routing, so there are no deep URLs to rewrite.
       priceClass: cloudfront.PriceClass.PRICE_CLASS_100,
